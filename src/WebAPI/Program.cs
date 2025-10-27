@@ -1,7 +1,17 @@
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.HttpOverrides;
 using WebAPI.Services;
 using WebAPI.Services.Contracts;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Configure logging
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+if (builder.Environment.IsDevelopment())
+{
+    builder.Logging.AddDebug();
+}
 
 // Add services to the container.
 builder.Services.AddEndpointsApiExplorer();
@@ -10,11 +20,45 @@ builder.Services.AddSwaggerGen();
 // Add memory cache
 builder.Services.AddMemoryCache();
 
+// Add rate limiting
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddPolicy("CalendarApi", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                Window = TimeSpan.FromMinutes(1),
+                PermitLimit = 10, // 10 requests per minute per IP
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 3
+            }));
+});
+
 // Add HTTP client with a reasonable timeout
 builder.Services.AddHttpClient<ICalendarService, CalendarService>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(30);
     client.DefaultRequestHeaders.Add("User-Agent", "BIR-Calendar-API/1.0");
+});
+
+// Configure forwarded headers for reverse proxy
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
+// Add CORS
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
 });
 
 // Register services
@@ -24,13 +68,17 @@ builder.Services.AddScoped<ICacheService, CacheService>();
 
 var app = builder.Build();
 
+app.UseForwardedHeaders();
+
 app.UseSwagger();
 app.UseSwaggerUI();
 
-app.UseHttpsRedirection();
+app.UseRateLimiter();
+
+app.UseCors();
 
 // Calendar endpoint that returns ICS feed
-app.MapGet("/calendar/{id}", async (string id, ICalendarService calendarService, IIcsService icsService, ICacheService cacheService) =>
+app.MapGet("/calendar/{id}", async (string id, ICalendarService calendarService, IIcsService icsService, ICacheService cacheService, HttpContext context) =>
 {
     try
     {
@@ -50,8 +98,12 @@ app.MapGet("/calendar/{id}", async (string id, ICalendarService calendarService,
         // Generate ICS content
         var icsContent = icsService.GenerateIcs(events, $"Tømmekalender - {id}");
 
+        // Add cache headers
+        context.Response.Headers.CacheControl = "public, max-age=3600"; // Cache for 1 hour
+        context.Response.Headers.ContentDisposition = $"attachment; filename=\"calendar-{id}.ics\"";
+
         // Return as ICS file
-        return Results.Text(icsContent, "text/calendar", null, null);
+        return Results.Text(icsContent, "text/calendar");
     }
     catch (HttpRequestException)
     {
@@ -68,7 +120,8 @@ app.MapGet("/calendar/{id}", async (string id, ICalendarService calendarService,
     operation.Summary = "Get calendar as ICS feed";
     operation.Description = "Returns calendar events for the specified ID as an ICS (iCalendar) feed";
     return operation;
-});
+})
+.RequireRateLimiting("CalendarApi");
 
 // Health check endpoint
 app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Timestamp = DateTime.UtcNow }))
