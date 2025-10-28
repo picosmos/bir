@@ -77,7 +77,7 @@ app.UseRateLimiter();
 
 app.UseCors();
 
-// Calendar endpoint that returns ICS feed
+// Calendar endpoint that returns ICS feed with events and reminders
 app.MapGet("/calendar/{id}", async (string id, ICalendarService calendarService, IIcsService icsService, ICacheService cacheService, HttpContext context) =>
 {
     try
@@ -90,12 +90,7 @@ app.MapGet("/calendar/{id}", async (string id, ICalendarService calendarService,
         // Get cached calendar events
         var events = await cacheService.GetCachedCalendarEventsAsync(id, calendarService.GetCalendarEventsAsync);
 
-        if (events.Count == 0)
-        {
-            return Results.NotFound("No calendar events found for the specified ID");
-        }
-
-        // Generate ICS content
+        // Generate ICS content with both events and reminders
         var icsContent = icsService.GenerateIcs(events, $"Tømmekalender - {id}");
 
         // Add cache headers
@@ -117,8 +112,9 @@ app.MapGet("/calendar/{id}", async (string id, ICalendarService calendarService,
 .WithName("GetCalendar")
 .WithOpenApi(operation =>
 {
-    operation.Summary = "Get calendar as ICS feed";
-    operation.Description = "Returns calendar events for the specified ID as an ICS (iCalendar) feed";
+    // cspell:words VEVENT VTODO
+    operation.Summary = "Get calendar as ICS feed with events and reminders";
+    operation.Description = "Returns calendar events and reminder tasks for the specified ID as a unified ICS (iCalendar) feed. Includes both VEVENT entries for the collection dates and VTODO entries for reminders.";
     return operation;
 })
 .RequireRateLimiting("CalendarApi");

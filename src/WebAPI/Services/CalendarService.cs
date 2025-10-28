@@ -110,7 +110,7 @@ public partial class CalendarService : ICalendarService
                         events.Add(new CalendarEvent(
                             Date: parsedDate, // Waste collection is typically a single day event
                             Title: $"{wasteType} - {dayText}",
-                            Description: $"Collection of {wasteType.ToLower(CultureInfo.InvariantCulture)}"
+                            Description: $"Henting av {wasteType.ToLower(CultureInfo.InvariantCulture)}"
                         ));
                     }
                 }
@@ -159,12 +159,12 @@ public partial class CalendarService : ICalendarService
     {
         return iconSrc switch
         {
-            string s when s.Contains("glassOgMetall.svg") => "Glass og metall",
-            string s when s.Contains("matavfall.svg") => "Matavfall",
-            string s when s.Contains("papirOgPlast.svg") => "Papir og plastemballasje",
-            string s when s.Contains("restavfall.svg") => "Restavfall",
-            string s when s.Contains("plastemballasje.svg") => "Plastemballasje",
-            _ => "Ukjent avfallstype"
+            string s when s.Contains("glassOgMetall.svg") => "glass og metall",
+            string s when s.Contains("matavfall.svg") => "matavfall",
+            string s when s.Contains("papirOgPlast.svg") => "papir og plastemballasje",
+            string s when s.Contains("restavfall.svg") => "restavfall",
+            string s when s.Contains("plastemballasje.svg") => "plastemballasje",
+            _ => "ukjent avfallstype"
         };
     }
 
