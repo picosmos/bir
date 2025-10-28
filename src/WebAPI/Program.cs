@@ -78,7 +78,7 @@ app.UseRateLimiter();
 app.UseCors();
 
 // Calendar endpoint that returns ICS feed with events and reminders
-app.MapGet("/calendar/{id}", async (string id, ICalendarService calendarService, IIcsService icsService, ICacheService cacheService, HttpContext context) =>
+app.MapGet("/calendar/{id}/{location}", async (string id, string location, ICalendarService calendarService, IIcsService icsService, ICacheService cacheService, HttpContext context) =>
 {
     try
     {
@@ -91,7 +91,7 @@ app.MapGet("/calendar/{id}", async (string id, ICalendarService calendarService,
         var events = await cacheService.GetCachedCalendarEventsAsync(id, calendarService.GetCalendarEventsAsync);
 
         // Generate ICS content with both events and reminders
-        var icsContent = icsService.GenerateIcs(events, $"Tømmekalender - {id}");
+        var icsContent = icsService.GenerateIcs(events, location);
 
         // Add cache headers
         context.Response.Headers.CacheControl = "public, max-age=3600"; // Cache for 1 hour

@@ -9,10 +9,9 @@ namespace WebAPI.Services;
 
 public class IcsService : IIcsService
 {
-    public string GenerateIcs(List<CalendarEvent> events, string calendarName = "Tømmekalender")
+    public string GenerateIcs(List<CalendarEvent> events, string location = "")
     {
         ArgumentNullException.ThrowIfNull(events);
-        ArgumentException.ThrowIfNullOrEmpty(calendarName);
 
         var ics = new StringBuilder();
 
@@ -20,19 +19,20 @@ public class IcsService : IIcsService
         ics.AppendLine("BEGIN:VCALENDAR");
         ics.AppendLine("VERSION:2.0");
         ics.AppendLine("PRODID:-//BIR Calendar//BIR Tømmekalender//EN");
-        ics.AppendLine(CultureInfo.InvariantCulture, $"X-WR-CALNAME:{EscapeIcsValue(calendarName)}");
+        ics.AppendLine(CultureInfo.InvariantCulture, $"X-WR-CALNAME:{EscapeIcsValue($"Tømmekalender {location}")}");
         ics.AppendLine("X-WR-CALDESC:Tømmekalender fra BIR");
         ics.AppendLine("CALSCALE:GREGORIAN");
         ics.AppendLine("METHOD:PUBLISH");
 
-        // Add events
+        var now = DateTime.UtcNow.ToString("yyyyMMddTHHmmssZ", CultureInfo.InvariantCulture);
+
         foreach (var calendarEvent in events)
         {
             ics.AppendLine("BEGIN:VEVENT");
 
             // Generate unique ID for the event
-            var uid = GenerateUid(calendarEvent);
-            ics.AppendLine(CultureInfo.InvariantCulture, $"UID:{uid}");
+            var uidEvent = GenerateUid(calendarEvent, "event");
+            ics.AppendLine(CultureInfo.InvariantCulture, $"UID:{uidEvent}");
 
             // Date formatting for whole-day events (VALUE=DATE format)
             var dtStart = calendarEvent.Date.ToString("yyyyMMdd", CultureInfo.InvariantCulture);
@@ -42,20 +42,14 @@ public class IcsService : IIcsService
             ics.AppendLine(CultureInfo.InvariantCulture, $"DTEND;VALUE=DATE:{dtEnd}");
 
             // Event details
-            ics.AppendLine(CultureInfo.InvariantCulture, $"SUMMARY:{EscapeIcsValue(calendarEvent.Title)}");
+            ics.AppendLine(CultureInfo.InvariantCulture, $"SUMMARY:{EscapeIcsValue($"Henting av {calendarEvent.WasteType}")}");
 
-            if (!string.IsNullOrEmpty(calendarEvent.Description))
+            if (!string.IsNullOrEmpty(location))
             {
-                ics.AppendLine(CultureInfo.InvariantCulture, $"DESCRIPTION:{EscapeIcsValue(calendarEvent.Description)}");
-            }
-
-            if (!string.IsNullOrEmpty(calendarEvent.Location))
-            {
-                ics.AppendLine(CultureInfo.InvariantCulture, $"LOCATION:{EscapeIcsValue(calendarEvent.Location)}");
+                ics.AppendLine(CultureInfo.InvariantCulture, $"LOCATION:{EscapeIcsValue(location)}");
             }
 
             // Created and last modified timestamps
-            var now = DateTime.UtcNow.ToString("yyyyMMddTHHmmssZ", CultureInfo.InvariantCulture);
             ics.AppendLine(CultureInfo.InvariantCulture, $"DTSTAMP:{now}");
             ics.AppendLine(CultureInfo.InvariantCulture, $"CREATED:{now}");
             ics.AppendLine(CultureInfo.InvariantCulture, $"LAST-MODIFIED:{now}");
@@ -67,36 +61,24 @@ public class IcsService : IIcsService
 
             // Add reminder for 4pm the day before
             ics.AppendLine("BEGIN:VALARM");
-            ics.AppendLine("TRIGGER;VALUE=DATE-TIME:" + calendarEvent.Date.AddDays(-1).Date.AddHours(16).ToUniversalTime().ToString("yyyyMMddTHHmmssZ", CultureInfo.InvariantCulture));
+            ics.AppendLine("TRIGGER;VALUE=DATE-TIME:" + calendarEvent.DateAsDateTime.AddDays(-1).AddHours(16).ToUniversalTime().ToString("yyyyMMddTHHmmssZ", CultureInfo.InvariantCulture));
             ics.AppendLine("ACTION:DISPLAY");
-            ics.AppendLine("DESCRIPTION:Reminder: " + EscapeIcsValue(calendarEvent.Title) + " tomorrow");
+            ics.AppendLine("DESCRIPTION:Påminnelse: " + EscapeIcsValue($"Henting av {calendarEvent.WasteType}") + " i morgen");
             ics.AppendLine("END:VALARM");
 
             ics.AppendLine("END:VEVENT");
-        }
 
-        // Add reminder tasks for each event
-        foreach (var calendarEvent in events)
-        {
             ics.AppendLine("BEGIN:VTODO");
-
             // Generate unique ID for the reminder
-            var uid = GenerateUid(calendarEvent, "reminder");
-            ics.AppendLine(CultureInfo.InvariantCulture, $"UID:{uid}");
+            var uidReminder = GenerateUid(calendarEvent, "reminder");
+            ics.AppendLine(CultureInfo.InvariantCulture, $"UID:{uidReminder}");
 
             // Due date for the reminder (day before the actual event at 4pm)
-            var dueDate = calendarEvent.Date.AddDays(-1).Date.AddHours(16).ToUniversalTime().ToString("yyyyMMddTHHmmssZ", CultureInfo.InvariantCulture);
+            var dueDate = calendarEvent.DateAsDateTime.AddDays(-1).Date.AddHours(16).ToUniversalTime().ToString("yyyyMMddTHHmmssZ", CultureInfo.InvariantCulture);
             ics.AppendLine(CultureInfo.InvariantCulture, $"DUE:{dueDate}");
 
             // Reminder details
-            ics.AppendLine(CultureInfo.InvariantCulture, $"SUMMARY:{EscapeIcsValue($"Påminnelse: {calendarEvent.Title}")}");
-
-            var description = $"Husk å sette ut bosset (henting {calendarEvent.Date:dd.MM.yyyy})";
-            if (!string.IsNullOrEmpty(calendarEvent.Description))
-            {
-                description += $"\n\nDetaljer: {calendarEvent.Description}";
-            }
-            ics.AppendLine(CultureInfo.InvariantCulture, $"DESCRIPTION:{EscapeIcsValue(description)}");
+            ics.AppendLine(CultureInfo.InvariantCulture, $"SUMMARY:{EscapeIcsValue($"Henting av {calendarEvent.WasteType} i morgen")}");
 
             // Priority (1=high, 5=medium, 9=low)
             ics.AppendLine("PRIORITY:5");
@@ -106,7 +88,6 @@ public class IcsService : IIcsService
             ics.AppendLine("CLASS:PUBLIC");
 
             // Created and last modified timestamps
-            var now = DateTime.UtcNow.ToString("yyyyMMddTHHmmssZ", CultureInfo.InvariantCulture);
             ics.AppendLine(CultureInfo.InvariantCulture, $"DTSTAMP:{now}");
             ics.AppendLine(CultureInfo.InvariantCulture, $"CREATED:{now}");
             ics.AppendLine(CultureInfo.InvariantCulture, $"LAST-MODIFIED:{now}");
@@ -120,12 +101,12 @@ public class IcsService : IIcsService
         return ics.ToString();
     }
 
-    private static string GenerateUid(CalendarEvent calendarEvent, string type = "event")
+    private static string GenerateUid(CalendarEvent calendarEvent, string icsType)
     {
         // Generate a unique ID based on the event details, type, and application version
         const string version = "2";
-        var sanitizedTitle = EscapeIcsValue(calendarEvent.Title).Replace(" ", "-");
-        return $"{calendarEvent.Date:yyyyMMdd}-{sanitizedTitle}-{type}-v{version}@bir.{type}.v{version}";
+        var sanitizedWasteType = EscapeIcsValue(calendarEvent.WasteType).Replace(" ", "-");
+        return $"{calendarEvent.Date:yyyyMMdd}-{sanitizedWasteType}@bir.{icsType}.v{version}";
     }
 
     private static string EscapeIcsValue(string value)

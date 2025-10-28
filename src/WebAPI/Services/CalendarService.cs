@@ -1,4 +1,3 @@
-using System.Globalization;
 using HtmlAgilityPack;
 using WebAPI.Models;
 using WebAPI.Services.Contracts;
@@ -109,8 +108,7 @@ public partial class CalendarService : ICalendarService
                     {
                         events.Add(new CalendarEvent(
                             Date: parsedDate, // Waste collection is typically a single day event
-                            Title: $"{wasteType} - {dayText}",
-                            Description: $"Henting av {wasteType.ToLower(CultureInfo.InvariantCulture)}"
+WasteType: wasteType
                         ));
                     }
                 }
@@ -168,7 +166,7 @@ public partial class CalendarService : ICalendarService
         };
     }
 
-    private bool TryParseDate(string dateText, int month, int year, out DateTime date)
+    private bool TryParseDate(string dateText, int month, int year, out DateOnly date)
     {
         date = default;
 
@@ -190,12 +188,12 @@ public partial class CalendarService : ICalendarService
         // We already have the month number from the section header
         try
         {
-            date = new DateTime(year, month, day, 0, 0, 0, DateTimeKind.Local);
+            date = new DateOnly(year, month, day);
             return true;
         }
         catch (ArgumentException)
         {
-            this._logger.LogWarning("Invalid date: {Day}/{Month}/{Year}", day, month, year);
+            this._logger.LogWarning("Invalid date: {Year}-{Month}-{Day}", year, month, day);
             return false;
         }
     }

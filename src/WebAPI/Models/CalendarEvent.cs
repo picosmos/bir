@@ -1,8 +1,9 @@
 namespace WebAPI.Models;
 
 public record CalendarEvent(
-    DateTime Date,
-    string Title,
-    string? Description = null,
-    string? Location = null
-);
+    DateOnly Date,
+    string WasteType
+)
+{
+    public DateTime DateAsDateTime => this.Date.ToDateTime(new TimeOnly(0, 0));
+};
