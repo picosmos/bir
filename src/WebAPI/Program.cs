@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
 using WebAPI.Services;
@@ -95,7 +96,8 @@ app.MapGet("/calendar/{id}/{location}", async (string id, string location, ICale
 
         // Add cache headers
         context.Response.Headers.CacheControl = "public, max-age=3600"; // Cache for 1 hour
-        context.Response.Headers.ContentDisposition = $"attachment; filename=\"calendar-{id}.ics\"";
+        var locationEscaped = NonAlphaNumericRegex().Replace(location, "-");
+        context.Response.Headers.ContentDisposition = $"attachment; filename=\"boss-kalender-{locationEscaped}.ics\"";
 
         // Return as ICS file
         return Results.Text(icsContent, "text/calendar");
@@ -134,3 +136,9 @@ app.MapPost("/admin/clear-cache", (ICacheService cacheService) =>
 .WithOpenApi();
 
 app.Run();
+
+public static partial class Program
+{
+    [GeneratedRegex(@"[^\d\w]")]
+    private static partial Regex NonAlphaNumericRegex();
+}
