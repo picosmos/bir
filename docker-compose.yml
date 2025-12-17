@@ -1,5 +1,6 @@
 services:
   bir-calendar:
+    container_name: bir-calendar
     build:
       dockerfile: Dockerfile
     ports:
